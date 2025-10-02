@@ -1,15 +1,18 @@
-import React, { useState } from 'react'
+import React, { useContext, useState } from 'react'
 import './NavBar.css';
 import logo from '../Assets/Images/logo.png';
 import cart_icon from '../Assets/Images/cart_icon.png';
 import { Link, Links } from 'react-router-dom';
+import { ShopContext } from '../../Context/ShopContext';
+
 export const NavBar = () => {
     const [menu,setMenu] = useState("shop");
+    const {getTotalCartItems} = useContext(ShopContext);
   return (
     <div className="navbar">
         <div className="nav-logo">
             <img src={logo} alt="nav-logo" />
-            <p>SHOPPER</p>
+            <p>SHOPEZONE</p>
         </div>
         <ul className="nav-menu">
             <li onClick={()=>{setMenu("shop")}}><Link to='/'>Shop</Link> {menu==="shop"?<hr/>:<></>}</li>
@@ -20,7 +23,7 @@ export const NavBar = () => {
         <div className="nav-login-cart">
             <Link to='/login'><button>Login</button></Link>
             <Link to='/cart'><img src={cart_icon} alt="cart_icon" /></Link>
-            <div className="nav-cart-count">0</div>
+            <div className="nav-cart-count">{getTotalCartItems()}</div>
         </div>
     </div>
   )
