@@ -12,7 +12,10 @@ app.use(cors());
 
 //mangoos backend connection
 
-mongoose.connect(process.env.MONGODB_URI);
+mongoose.connect("mongodb+srv://abhi:abhi@cluster0.wp4w12a.mongodb.net/e-commerce");
+=======
+mongoose.connect("mongodb+srv://abhi:abhi@cluster0.wp4w12a.mongodb.net/e-commerce");
+>>>>>>> 54ade2020a19e6d0b96b17145455a9f4fdc7948b
 
 //API creation
 
