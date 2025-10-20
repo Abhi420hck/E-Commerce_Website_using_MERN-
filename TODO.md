@@ -7,7 +7,7 @@
 
 ## Steps
 - [x] Prepare backend for production (env vars, update URLs)
-- [ ] Deploy backend to Render
+- [x] Deploy backend to Render
 - [ ] Build and deploy frontend to Vercel
 - [ ] Build and deploy admin to Vercel
 - [ ] Update frontend and admin to use production backend URL
