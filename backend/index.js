@@ -33,13 +33,15 @@ const storage = multer.diskStorage({
 const upload = multer({storage:storage})
 
 //Creating Upload Endpoint for images
-app.use('/images',express.static('upload/images'))
+
+app.use('/images', express.static(path.join(__dirname, 'upload/images')));
 
 app.post('/upload',upload.single('product'),(req,res)=>{
     const baseUrl = process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${port}`;
+    const githubRawUrl = `https://raw.githubusercontent.com/Abhi420hck/E-Commerce_Website_using_MERN-/main/backend/upload/images/${req.file.filename}`;
     res.json({
         success:1 ,
-        image_url:`${baseUrl}/images/${req.file.filename}`
+        image_url: githubRawUrl
     })
 })
 
@@ -264,12 +266,44 @@ app.post('/removefromcart',fetchUser,async (req,res)=>{
     res.json({success: true, message: "Item Removed"});
 })
 
-//retrive cart info
 app.post('/getcart',fetchUser,async (req,res)=>{
     console.log("GetCart");
     let userData = await Users.findOne({_id:req.user.id});
     res.json(userData.cartData);
 } )
+
+// Endpoint to update all product image URLs to GitHub raw URLs
+app.post('/updateimages', async (req, res) => {
+    try {
+        let products = await Product.find({});
+        let updatedCount = 0;
+
+        for (let product of products) {
+            // Extract filename from current image URL
+            const urlParts = product.image.split('/');
+            const filename = urlParts[urlParts.length - 1];
+
+            // Construct new GitHub raw URL
+            const githubRawUrl = `https://raw.githubusercontent.com/Abhi420hck/E-Commerce_Website_using_MERN-/main/backend/upload/images/${filename}`;
+
+            // Update the product image URL
+            await Product.findOneAndUpdate({ id: product.id }, { image: githubRawUrl });
+            updatedCount++;
+        }
+
+        console.log(`Updated ${updatedCount} product image URLs`);
+        res.json({
+            success: true,
+            message: `Updated ${updatedCount} product image URLs to GitHub raw URLs`
+        });
+    } catch (error) {
+        console.error("Error updating image URLs:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error updating image URLs"
+        });
+    }
+})
 
 
 
