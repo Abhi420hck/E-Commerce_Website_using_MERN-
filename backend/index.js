@@ -12,10 +12,7 @@ app.use(cors());
 
 //mangoos backend connection
 
-mongoose.connect(process.env.MONGODB_URI);
-=======
 mongoose.connect("mongodb+srv://abhi:abhi@cluster0.wp4w12a.mongodb.net/e-commerce");
->>>>>>> 54ade2020a19e6d0b96b17145455a9f4fdc7948b
 
 //API creation
 
@@ -111,6 +108,7 @@ app.post('/addproduct',async (req,res)=>{
         name:req.body.name,
     })
 })
+
 
 
 
@@ -272,6 +270,9 @@ app.post('/getcart',fetchUser,async (req,res)=>{
     let userData = await Users.findOne({_id:req.user.id});
     res.json(userData.cartData);
 } )
+
+
+
 
 
 
