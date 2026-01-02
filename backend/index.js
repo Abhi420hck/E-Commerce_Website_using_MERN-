@@ -1,323 +1,193 @@
-require('dotenv').config();
-const port = process.env.PORT || 4000;
+require("dotenv").config();
 const express = require("express");
-const app = express();
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+// ================= MIDDLEWARE =================
 app.use(express.json());
 app.use(cors());
 
-//mangoos backend connection
+// ================= DB CONNECTION =================
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => {
+    console.error("MongoDB connection error:", err.message);
+    process.exit(1);
+  });
 
-mongoose.connect("mongodb+srv://abhi:abhi@cluster0.wp4w12a.mongodb.net/e-commerce");
+// ================= BASIC API =================
+app.get("/", (req, res) => {
+  res.send("Express App is Running");
+});
 
-//API creation
-
-app.get("/",(req,res) => {
-    res.send("Express App is Running");
-})
-
-
-//Image Storage Engiene
-
+// ================= IMAGE UPLOAD (LOCAL ONLY FOR COMMIT) =================
 const storage = multer.diskStorage({
-    destination: './upload/images',
-    filename:(req,file,cb)=>{
-        return cb(null,`${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`)
-    }
-})
+  destination: "./upload/images",
+  filename: (req, file, cb) => {
+    cb(
+      null,
+      `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`
+    );
+  },
+});
 
-const upload = multer({storage:storage})
+const upload = multer({ storage });
 
-//Creating Upload Endpoint for images
+// Upload endpoint (returns GitHub RAW URL)
+app.post("/upload", upload.single("product"), (req, res) => {
+  const githubRawUrl = `https://raw.githubusercontent.com/Abhi420hck/E-Commerce_Website_using_MERN-/main/backend/upload/images/${req.file.filename}`;
 
-app.use('/images', express.static(path.join(__dirname, 'upload/images')));
+  res.json({
+    success: 1,
+    image_url: githubRawUrl,
+  });
+});
 
-app.post('/upload',upload.single('product'),(req,res)=>{
-    const baseUrl = process.env.NODE_ENV === 'production' ? process.env.BACKEND_URL : `http://localhost:${port}`;
-    const githubRawUrl = `https://raw.githubusercontent.com/Abhi420hck/E-Commerce_Website_using_MERN-/main/backend/upload/images/${req.file.filename}`;
-    res.json({
-        success:1 ,
-        image_url: githubRawUrl
-    })
-})
+// ================= PRODUCT MODEL =================
+const Product = mongoose.model("Product", {
+  id: { type: Number, required: true },
+  name: { type: String, required: true },
+  image: { type: String, required: true },
+  category: { type: String, required: true },
+  new_price: { type: Number, required: true },
+  old_price: { type: Number, required: true },
+  date: { type: Date, default: Date.now },
+  available: { type: Boolean, default: true },
+});
 
+// ================= PRODUCT APIs =================
+app.post("/addproduct", async (req, res) => {
+  try {
+    const products = await Product.find({});
+    const id = products.length ? products[products.length - 1].id + 1 : 1;
 
-// Schema for Creating products
-
-const Product = mongoose.model("Product",{
-    id:{
-        type:Number,
-        required:true,
-    },
-    name:{
-        type:String,
-        required:true,
-    },
-    image:{
-        type:String,
-        required:true,
-    },
-    category:{
-        type:String,
-        required:true,
-    },
-    new_price:{
-        type:Number,
-        required:true,
-    },
-    old_price:{
-        type:Number,
-        required:true,
-    },
-    date:{
-        type:Date,
-        default:Date.now,
-    },
-    avliable:{
-        type:Boolean,
-        default:true,
-    },
-})
-
-app.post('/addproduct',async (req,res)=>{
-    let products = await Product.find({});
-    let id;
-    if(products.length>0){
-        let last_product_array = products.slice(-1);
-        let last_product = last_product_array[0];
-        id = last_product.id + 1;
-    }
-    else{
-        id = 1;
-    }
-    const product = new Product({
-        id:id,
-        name:req.body.name,
-        image:req.body.image,
-        category:req.body.category,
-        new_price:req.body.new_price,
-        old_price:req.body.old_price,
-    });
-    console.log(product);
+    const product = new Product({ id, ...req.body });
     await product.save();
-    console.log("Saved");
-    res.json({
-        success:true,
-        name:req.body.name,
-    })
-})
 
+    res.json({ success: true, product });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
+app.post("/removeproduct", async (req, res) => {
+  await Product.findOneAndDelete({ id: req.body.id });
+  res.json({ success: true });
+});
 
+app.get("/allproducts", async (req, res) => {
+  const products = await Product.find({});
+  res.json(products);
+});
 
+app.get("/newcollection", async (req, res) => {
+  const products = await Product.find({});
+  res.json(products.slice(-8));
+});
 
-//Creating api for deleting products
+app.get("/popularinwomen", async (req, res) => {
+  const products = await Product.find({ category: "women" });
+  res.json(products.slice(-4));
+});
 
-app.post('/removeproduct',async (req,res)=>{
-    await Product.findOneAndDelete({id:req.body.id});
-    console.log("removed");
-    res.json({
-        success:true,
-        name:req.body.name,
-    })
-})
+// ================= USER MODEL =================
+const Users = mongoose.model("Users", {
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
+  cartData: Object,
+  date: { type: Date, default: Date.now },
+});
 
+// ================= AUTH =================
+app.post("/signup", async (req, res) => {
+  const exists = await Users.findOne({ email: req.body.email });
+  if (exists) {
+    return res
+      .status(400)
+      .json({ success: false, error: "User already exists" });
+  }
 
-//get method for all products
-app.get('/allproducts', async (req,res) => {
-    let all_products = await Product.find({});
-    console.log("all products fetched");
-    res.send(all_products);
-})
+  let cart = {};
+  for (let i = 0; i < 300; i++) cart[i] = 0;
 
+  const user = new Users({
+    name: req.body.username,
+    email: req.body.email,
+    password: req.body.password, // ⚠️ demo only (hash later)
+    cartData: cart,
+  });
 
-//Schema Creating for user model
-const Users = mongoose.model('Users',{
-    name:{
-        type:String,
-    },
-    email:{
-        type:String,
-        unique:true,
-    },
-    password:{
-        type:String,
-    },
-    cartData:{
-        type:Object,
-    },
-    date:{
-        type:Date,
-        default:Date.now
-    }
-})
+  await user.save();
 
-//creating Endpoint for registering user
-app.post('/signup',async (req,res)=>{
-    
-    let check = await Users.findOne({email:req.body.email});
-    if(check){
-        return res.status(400).json({success:false,errors:"existing user found with same email id"})
-    }
-    let cart = {};
-    for(let i=0;i<300;i++){
-        cart[i]  = 0;
-    }
-    const user = new Users({
-        name:req.body.username,
-        email:req.body.email,
-        password:req.body.password,
-        cartData:cart,
-    })
+  const token = jwt.sign({ user: { id: user._id } }, process.env.JWT_SECRET);
+  res.json({ success: true, token });
+});
 
-    await user.save();
+app.post("/login", async (req, res) => {
+  const user = await Users.findOne({ email: req.body.email });
+  if (!user || user.password !== req.body.password) {
+    return res.json({ success: false, error: "Invalid credentials" });
+  }
 
-    const data = {
-        user:{
-            id:user.id
-        }
-    }
+  const token = jwt.sign({ user: { id: user._id } }, process.env.JWT_SECRET);
+  res.json({ success: true, token });
+});
 
-    const token = jwt.sign(data, process.env.JWT_SECRET);
-    res.json({success:true,token});
-})
+// ================= AUTH MIDDLEWARE =================
+const fetchUser = (req, res, next) => {
+  const token = req.header("auth-token");
+  if (!token) return res.status(401).json({ error: "No token" });
 
-//creating end point for user login
-app.post('/login',async (req,res)=>{
-    let user = await Users.findOne({email:req.body.email});
-    if(user){
-        const passCompare = req.body.password === user.password;
-        if(passCompare){
-            const data = {
-                user:{
-                    id:user.id
-                }
-            }
-            const token = jwt.sign(data, process.env.JWT_SECRET);
-            res.json({success:true,token});
-        }
-        else{
-            res.json({success:false,errors:"wrong password"});
-        }
-    }
-    else{
-        res.json({succes:false,errors:"wrong email id"})
-    }
-})
+  try {
+    const data = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = data.user;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+};
 
+// ================= CART =================
+app.post("/addtocart", fetchUser, async (req, res) => {
+  const user = await Users.findById(req.user.id);
+  user.cartData[req.body.itemId] += 1;
+  await user.save();
+  res.json({ success: true });
+});
 
-// creating end point for newcollection data
-app.get('/newcollection',async (req,res)=>{
-    let products = await Product.find({});
-    let newcollection = products.slice(1).slice(-8);
-    console.log("New collection fetched");
-    res.send(newcollection);
-})
+app.post("/removefromcart", fetchUser, async (req, res) => {
+  const user = await Users.findById(req.user.id);
+  if (user.cartData[req.body.itemId] > 0)
+    user.cartData[req.body.itemId] -= 1;
+  await user.save();
+  res.json({ success: true });
+});
 
-//creating collection for popular in women
-app.get('/popularinwomen',async (req,res)=>{
-    let products = await Product.find({category:"women"});
-    let popular_products = products.slice(-4);
-    console.log("popular in women fetched successfully");
-    res.send(popular_products);
-})
+app.post("/getcart", fetchUser, async (req, res) => {
+  const user = await Users.findById(req.user.id);
+  res.json(user.cartData);
+});
 
+// ================= MIGRATE OLD IMAGE URLS =================
+app.post("/updateimages", async (req, res) => {
+  const products = await Product.find({});
+  for (let p of products) {
+    const filename = p.image.split("/").pop();
+    p.image = `https://raw.githubusercontent.com/Abhi420hck/E-Commerce_Website_using_MERN-/main/backend/upload/images/${filename}`;
+    await p.save();
+  }
+  res.json({ success: true });
+});
 
-//creating middlware to fetch user
-
-const fetchUser = async (req,res,next)=>{
-    const token = req.header('auth-token');
-    if(!token){
-        res.status(401).send({errors:"Please authenticate using valid token"})
-    }
-    else{
-        try{
-            const data = jwt.verify(token, process.env.JWT_SECRET);
-            req.user = data.user;
-            next();
-        }catch(error){
-            res.status(401).send({errors:"please authenticate using a valid token"})
-        }
-    }
-}
-
-//creating endpoint for adding cart items
-
-app.post('/addtocart',fetchUser,async (req,res)=>{
-    console.log("Added",req.body.itemId);
-    let userData = await Users.findOne({_id:req.user.id});
-    userData.cartData[req.body.itemId] += 1;
-    await Users.findOneAndUpdate({_id:req.user.id},{cartData:userData.cartData});
-    res.json({success: true, message: "Item Added"});
-})
-
-// to remove from cart
-
-app.post('/removefromcart',fetchUser,async (req,res)=>{
-    console.log("removed",req.body.itemId);
-    let userData = await Users.findOne({_id:req.user.id});
-    if(userData.cartData[req.body.itemId]>0)
-        userData.cartData[req.body.itemId] -= 1;
-    await Users.findOneAndUpdate({_id:req.user.id},{cartData:userData.cartData});
-    res.json({success: true, message: "Item Removed"});
-})
-
-app.post('/getcart',fetchUser,async (req,res)=>{
-    console.log("GetCart");
-    let userData = await Users.findOne({_id:req.user.id});
-    res.json(userData.cartData);
-} )
-
-// Endpoint to update all product image URLs to GitHub raw URLs
-app.post('/updateimages', async (req, res) => {
-    try {
-        let products = await Product.find({});
-        let updatedCount = 0;
-
-        for (let product of products) {
-            // Extract filename from current image URL
-            const urlParts = product.image.split('/');
-            const filename = urlParts[urlParts.length - 1];
-
-            // Construct new GitHub raw URL
-            const githubRawUrl = `https://raw.githubusercontent.com/Abhi420hck/E-Commerce_Website_using_MERN-/main/backend/upload/images/${filename}`;
-
-            // Update the product image URL
-            await Product.findOneAndUpdate({ id: product.id }, { image: githubRawUrl });
-            updatedCount++;
-        }
-
-        console.log(`Updated ${updatedCount} product image URLs`);
-        res.json({
-            success: true,
-            message: `Updated ${updatedCount} product image URLs to GitHub raw URLs`
-        });
-    } catch (error) {
-        console.error("Error updating image URLs:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating image URLs"
-        });
-    }
-})
-
-
-
-
-
-
-
-
-
-app.listen(port,(error)=> {
-    if(!error){
-        console.log("Server listening on port " + port);
-    }
-    else{
-        console.log("Error: " + error);
-    }
-})
+// ================= SERVER =================
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
